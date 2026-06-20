@@ -102,7 +102,7 @@ File ini perlu ada di `/etc/oracle/tnsnames.ora` di dalam container.
 ```bash
 # Di dalam container
 cat > /etc/oracle/tnsnames.ora << 'EOF'
-ALTHARA =
+ALTHARADEV =
   (DESCRIPTION =
     (ADDRESS = (PROTOCOL = TCP)(HOST = 192.168.0.7)(PORT = 1521))
     (CONNECT_DATA =
@@ -110,6 +110,16 @@ ALTHARA =
       (SERVICE_NAME = althara)
     )
   )
+  
+ALTHARA=
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = mgtoradb-scan.mutugading.com)(PORT = 1521))
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SERVICE_NAME = althara)
+    )
+  ) 
+  
 EOF
 ```
 

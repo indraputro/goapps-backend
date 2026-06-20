@@ -43,7 +43,8 @@ services:
       - DB_PASSWORD=goapps_dev
       - DB_NAME=goapps_dev
       - DB_SSLMODE=disable
-      - ORACLE_DSN=mgthris/mgthris@192.168.0.7:1521/althara
+      - ORACLE_DSN=MGTDAT/MGTDAT@ALTHARA         # live DB
+      - ORACLE_DSN_DEV=mgthris/mgthris@ALTHARADEV  # test/dev DB
       - ETL_INTERVAL_MINUTES=15
       - ETL_WATERMARK_BUFFER_MINUTES=30
       - APP_ENV=development
@@ -59,6 +60,8 @@ services:
     working_dir: /workspace
     stdin_open: true
     tty: true
+    extra_hosts:
+      - "mgtoradb-scan.mutugading.com:192.168.0.203"
     networks:
       - goapps-net
 
