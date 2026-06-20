@@ -1,0 +1,94 @@
+# =============================================================================
+# Dockerfile.dev — goapps-backend Development Environment
+# For: PPC Production Planning System (Phase 1)
+# Stack: Go 1.24, PostgreSQL client, gRPC/protobuf, golangci-lint, Claude Code
+#
+# Semua Go tools di-pin ke versi yang compatible dengan Go 1.24
+# @latest sering maju ke versi yang butuh Go 1.25/1.26
+# =============================================================================
+
+FROM golang:1.24-bookworm
+
+# ─────────────────────────────────────────────
+# System packages
+# ─────────────────────────────────────────────
+RUN apt-get update && apt-get install -y \
+    curl wget git unzip \
+    make gcc g++ \
+    postgresql-client \
+    libaio1 libaio-dev \
+    netcat-openbsd iputils-ping \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# ─────────────────────────────────────────────
+# Oracle Instant Client dependencies
+# ─────────────────────────────────────────────
+RUN mkdir -p /opt/oracle /etc/oracle
+
+ENV ORACLE_HOME=/opt/oracle/instantclient_21_10
+ENV LD_LIBRARY_PATH=/opt/oracle/instantclient_21_10:$LD_LIBRARY_PATH
+ENV TNS_ADMIN=/etc/oracle
+
+# ─────────────────────────────────────────────
+# Go tools — semua di-pin ke versi compatible Go 1.24
+# ─────────────────────────────────────────────
+
+# golangci-lint v2.1.6
+RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
+    | sh -s -- -b /usr/local/bin v2.1.6
+
+# gopls v0.17.1 (v0.18+ butuh Go 1.26)
+RUN go install golang.org/x/tools/gopls@v0.17.1
+
+# golang-migrate
+RUN go install -tags 'postgres' \
+    github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.1
+
+# gotestsum
+RUN go install gotest.tools/gotestsum@v1.12.0
+
+# mockery v2
+RUN go install github.com/vektra/mockery/v2@v2.50.0
+
+# air v1.61.7 (v1.65+ butuh Go 1.25)
+RUN go install github.com/air-verse/air@v1.61.7
+
+# ─────────────────────────────────────────────
+# Protobuf / gRPC tools — pin ke versi compatible Go 1.24
+# ─────────────────────────────────────────────
+
+# protoc v27
+RUN curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v27.0/protoc-27.0-linux-x86_64.zip \
+    && unzip protoc-27.0-linux-x86_64.zip -d /usr/local \
+    && rm protoc-27.0-linux-x86_64.zip
+
+# protoc-gen-go v1.35.2
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.35.2
+
+# protoc-gen-go-grpc v1.5.1 (v1.6+ butuh Go 1.25)
+RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
+
+# protoc-gen-grpc-gateway v2.23.0
+RUN go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.23.0
+
+# protoc-gen-openapiv2 v2.23.0
+RUN go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@v2.23.0
+
+# ─────────────────────────────────────────────
+# Claude Code
+# ─────────────────────────────────────────────
+RUN npm install -g @anthropic-ai/claude-code
+
+# ─────────────────────────────────────────────
+# Go environment
+# ─────────────────────────────────────────────
+ENV GOPATH=/go
+ENV PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
+ENV GOPROXY=https://proxy.golang.org,direct
+ENV CGO_ENABLED=1
+
+WORKDIR /workspace
+CMD ["/bin/bash"]

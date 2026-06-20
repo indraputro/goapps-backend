@@ -1,0 +1,141 @@
+# =============================================================================
+# docker-compose.dev.yml — goapps-backend Development
+# Usage:
+#   docker compose -f docker-compose.dev.yml up -d
+#   docker compose -f docker-compose.dev.yml exec app bash
+#   (lalu di dalam container: claude)
+# =============================================================================
+
+services:
+
+  # ─────────────────────────────────────────────
+  # Main development container
+  # ─────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: goapps-dev
+    volumes:
+      - type: bind
+        source: .
+        target: /workspace
+      - type: bind
+        source: ../docs-markdown
+        target: /docs
+      # Oracle Instant Client dari host
+      # Uncomment dan sesuaikan path jika Oracle sudah terinstall di host
+      # - type: bind
+      #   source: C:/oracle/instantclient_21_10
+      #   target: /opt/oracle/instantclient_21_10
+      #   read_only: true
+      - go-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+      - claude-config:/root/.claude
+    ports:
+      - "50051:50051"   # gRPC
+      - "8080:8080"     # gRPC-Gateway REST
+      - "2345:2345"     # Delve debugger
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=goapps
+      - DB_PASSWORD=goapps_dev
+      - DB_NAME=goapps_dev
+      - DB_SSLMODE=disable
+      - ORACLE_DSN=mgthris/mgthris@192.168.0.7:1521/althara
+      - ETL_INTERVAL_MINUTES=15
+      - ETL_WATERMARK_BUFFER_MINUTES=30
+      - APP_ENV=development
+      - APP_PORT=50051
+      - APP_REST_PORT=8080
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379   # port di dalam Docker network, tetap 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    networks:
+      - goapps-net
+
+  # ─────────────────────────────────────────────
+  # PostgreSQL 18
+  # ─────────────────────────────────────────────
+  postgres:
+    image: postgres:18-bookworm
+    container_name: goapps-postgres
+    environment:
+      POSTGRES_USER: goapps
+      POSTGRES_PASSWORD: goapps_dev
+      POSTGRES_DB: goapps_dev
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U goapps -d goapps_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - goapps-net
+
+  # ─────────────────────────────────────────────
+  # Redis 7
+  # Port host 6380 supaya tidak conflict dengan Redis existing di port 6379
+  # Koneksi antar container tetap pakai redis:6379 (Docker network internal)
+  # ─────────────────────────────────────────────
+  redis:
+    image: redis:7-bookworm
+    container_name: goapps-redis
+    ports:
+      - "6380:6379"   # host 6380 → container 6379
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - goapps-net
+
+  # ─────────────────────────────────────────────
+  # Jaeger (OpenTelemetry tracing UI)
+  # Jalankan dengan: docker compose -f docker-compose.dev.yml --profile tracing up -d
+  # Access: http://localhost:16686
+  # ─────────────────────────────────────────────
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: goapps-jaeger
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - goapps-net
+    profiles:
+      - tracing
+
+volumes:
+  postgres-data:
+    name: goapps-postgres-data
+  redis-data:
+    name: goapps-redis-data
+  go-cache:
+    name: goapps-go-module-cache
+  go-build-cache:
+    name: goapps-go-build-cache
+  claude-config:
+    name: goapps-claude-config
+
+networks:
+  goapps-net:
+    name: goapps-network
+    driver: bridge
